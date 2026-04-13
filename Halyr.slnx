@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/Halyr.api/">
+    <Project Path="Halyr.api/Halyr.Api.csproj" />
+  </Folder>
+</Solution>
