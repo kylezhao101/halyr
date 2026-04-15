@@ -1,84 +1,76 @@
 using Halyr.Api.Models;
 using Halyr.Api.Enums;
+using Halyr.Api.Data;
+using Microsoft.EntityFrameworkCore;
+using Halyr.Api.DTOs;
 
 namespace Halyr.Api.Services;
 
 
 public class FeatureFlagService : IFeatureFlagService
 {
-    private readonly List<FeatureFlag> _flags =
-    [
-        new FeatureFlag
-        {
-            Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-            Key = "new_dashboard",
-            Name = "New Dashboard"
-        },
-        new FeatureFlag
-        {
-            Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-            Key = "beta_upload_flow",
-            Name = "Beta Upload Flow"
-        }
-    ];
+    private readonly AppDbContext _dbContext;
 
-    private readonly List<FeatureFlagEnvironment> _environments =
-    [
-        new FeatureFlagEnvironment
-        {
-            Id = Guid.NewGuid(),
-            FeatureFlagId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-            Environment = EnvironmentType.Development,
-            Enabled = true,
-            PercentageRollout = 100
-        },
-        new FeatureFlagEnvironment
-        {
-            Id = Guid.NewGuid(),
-            FeatureFlagId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-            Environment = EnvironmentType.Staging,
-            Enabled = true,
-            PercentageRollout = 100
-        },
-        new FeatureFlagEnvironment
-        {
-            Id = Guid.NewGuid(),
-            FeatureFlagId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-            Environment = EnvironmentType.Production,
-            Enabled = true,
-            PercentageRollout = 25
-        },
-        new FeatureFlagEnvironment
-        {
-            Id = Guid.NewGuid(),
-            FeatureFlagId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-            Environment = EnvironmentType.Production,
-            Enabled = false,
-            PercentageRollout = 100
-        }
-    ];
-
-    public IEnumerable<FeatureFlag> GetAll()
-    {        
-        return _flags;
+    public FeatureFlagService(AppDbContext dbContext)
+    {
+        _dbContext = dbContext;
     }
 
-    public FeatureFlag? GetByKey(string key)
+    public IEnumerable<FlagResponseDTO> GetAll()
     {
-        return _flags.FirstOrDefault(flag =>
-            flag.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+        return _dbContext.FeatureFlags
+            .AsNoTracking()
+            .Include(flag => flag.Environments)
+            .Select(flag => new FlagResponseDTO
+            {
+                Id = flag.Id,
+                Key = flag.Key,
+                Name = flag.Name,
+                Environments = flag.Environments.Select(env => new FlagEnvironmentDTO
+                {
+                    Environment = env.Environment,
+                    Enabled = env.Enabled,
+                    PercentageRollout = env.PercentageRollout
+                }).ToList()
+            })
+            .ToList();
+    }
+
+    public FlagResponseDTO? GetByKey(string key)
+    {
+        return _dbContext.FeatureFlags
+            .AsNoTracking()
+            .Include(flag => flag.Environments)
+            .Where(flag => flag.Key == key)
+            .Select(flag => new FlagResponseDTO
+            {   
+                Id = flag.Id,
+                Key = flag.Key,
+                Name = flag.Name,
+                Environments = flag.Environments.Select(env => new FlagEnvironmentDTO
+                {
+                    Environment = env.Environment,
+                    Enabled = env.Enabled,
+                    PercentageRollout = env.PercentageRollout
+                }).ToList()
+            })
+            .FirstOrDefault();
     }
 
     public FeatureFlagEnvironment? GetEnvironmentConfiguration(string flagKey, EnvironmentType environment)
     {
-        var flag = GetByKey(flagKey);
+    var flag = _dbContext.FeatureFlags
+        .AsNoTracking()
+        .FirstOrDefault(flag => flag.Key == flagKey);
 
-        if (flag is null)
-        {
-            return null;
-        }
+    if (flag is null)
+    {
+        return null;
+    }
 
-        return _environments.FirstOrDefault(env =>
+    return _dbContext.FeatureFlagEnvironments
+        .AsNoTracking()
+        .FirstOrDefault(env =>
             env.FeatureFlagId == flag.Id &&
             env.Environment == environment);
     }
