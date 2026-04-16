@@ -5,7 +5,7 @@ using Halyr.Api.Enums;
 
 namespace Halyr.Api.DTOs;
 
-public class EvaluateFlagResponse
+public class EvaluateFlagResponseDTO
 {
     public string FlagKey { get; set; } = string.Empty;
     public Guid UserId { get; set; }

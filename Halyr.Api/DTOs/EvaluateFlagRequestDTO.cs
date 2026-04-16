@@ -4,7 +4,7 @@ using Halyr.Api.Enums;
 
 namespace Halyr.Api.DTOs;
 
-public class EvaluateFlagRequest
+public class EvaluateFlagRequestDTO
 {
     public string FlagKey { get; set; } = string.Empty;
     public Guid UserId { get; set; }
