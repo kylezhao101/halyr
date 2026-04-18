@@ -12,13 +12,13 @@ public class FeatureFlagEvaluationService : IFeatureFlagEvaluationService
         _featureFlagService = featureFlagService;
     }
 
-    public EvaluateFlagResponse Evaluate(EvaluateFlagRequest request)
+    public EvaluateFlagResponseDTO Evaluate(EvaluateFlagRequestDTO request)
     {
         var flag = _featureFlagService.GetByKey(request.FlagKey);
 
         if (flag is null)
         {
-            return new EvaluateFlagResponse
+            return new EvaluateFlagResponseDTO
             {
                 FlagKey = request.FlagKey,
                 UserId = request.UserId,
@@ -32,7 +32,7 @@ public class FeatureFlagEvaluationService : IFeatureFlagEvaluationService
 
         if (config is null)
         {
-            return new EvaluateFlagResponse
+            return new EvaluateFlagResponseDTO
             {
                 FlagKey = request.FlagKey,
                 UserId = request.UserId,
@@ -45,7 +45,7 @@ public class FeatureFlagEvaluationService : IFeatureFlagEvaluationService
 
         if (!config.Enabled)
         {
-            return new EvaluateFlagResponse
+            return new EvaluateFlagResponseDTO
             {
                 FlagKey = flag.Key,
                 UserId = request.UserId,
@@ -60,7 +60,7 @@ public class FeatureFlagEvaluationService : IFeatureFlagEvaluationService
         var bucket = HashingHelper.GetBucket(request.FlagKey, request.UserId);
         var enabled = bucket < rollout;
 
-        return new EvaluateFlagResponse
+        return new EvaluateFlagResponseDTO
         {
             FlagKey = flag.Key,
             UserId = request.UserId,

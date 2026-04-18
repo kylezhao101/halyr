@@ -16,7 +16,7 @@ public class EvaluationController : ControllerBase
     }
 
     [HttpPost]
-    public ActionResult<EvaluateFlagResponse> Evaluate([FromBody] EvaluateFlagRequest request)
+    public ActionResult<EvaluateFlagResponseDTO> Evaluate([FromBody] EvaluateFlagRequestDTO request)
     {
         var response = _featureEvaluationService.Evaluate(request);
         return Ok(response);

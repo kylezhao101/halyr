@@ -16,6 +16,33 @@ public class FeatureFlagService : IFeatureFlagService
         _dbContext = dbContext;
     }
 
+    private static FlagResponseDTO MapToResponse(FeatureFlag flag)
+    {
+        return new FlagResponseDTO
+        {
+            Id = flag.Id,
+            Key = flag.Key,
+            Name = flag.Name,
+            Description = flag.Description,
+            Environments = flag.Environments.Select(env => new EnvironmentConfigResponseDTO
+            {
+                Environment = env.Environment,
+                Enabled = env.Enabled,
+                PercentageRollout = env.PercentageRollout
+            }).ToList()
+        };
+    }
+
+    private static EnvironmentConfigResponseDTO MapToEnvironmentResponse(FeatureFlagEnvironment env)
+    {
+        return new EnvironmentConfigResponseDTO
+        {
+            Environment = env.Environment,
+            Enabled = env.Enabled,
+            PercentageRollout = env.PercentageRollout
+        };
+    }
+
     public IEnumerable<FlagResponseDTO> GetAll()
     {
         return _dbContext.FeatureFlags
@@ -26,7 +53,7 @@ public class FeatureFlagService : IFeatureFlagService
                 Id = flag.Id,
                 Key = flag.Key,
                 Name = flag.Name,
-                Environments = flag.Environments.Select(env => new FlagEnvironmentDTO
+                Environments = flag.Environments.Select(env => new EnvironmentConfigResponseDTO
                 {
                     Environment = env.Environment,
                     Enabled = env.Enabled,
@@ -38,16 +65,18 @@ public class FeatureFlagService : IFeatureFlagService
 
     public FlagResponseDTO? GetByKey(string key)
     {
+        var normalizedKey = key.Trim().ToLowerInvariant();
         return _dbContext.FeatureFlags
             .AsNoTracking()
             .Include(flag => flag.Environments)
-            .Where(flag => flag.Key == key)
+            .Where(flag => flag.Key == normalizedKey)
             .Select(flag => new FlagResponseDTO
             {   
                 Id = flag.Id,
                 Key = flag.Key,
                 Name = flag.Name,
-                Environments = flag.Environments.Select(env => new FlagEnvironmentDTO
+                Description = flag.Description,
+                Environments = flag.Environments.Select(env => new EnvironmentConfigResponseDTO
                 {
                     Environment = env.Environment,
                     Enabled = env.Enabled,
@@ -57,21 +86,199 @@ public class FeatureFlagService : IFeatureFlagService
             .FirstOrDefault();
     }
 
-    public FeatureFlagEnvironment? GetEnvironmentConfiguration(string flagKey, EnvironmentType environment)
+    public FlagResponseDTO Create(CreateFlagRequestDTO request)
     {
+        var normalizedKey = request.Key.Trim().ToLowerInvariant();
+
+        var exists = _dbContext.FeatureFlags.Any(f => f.Key == normalizedKey);
+        if (exists)
+        {
+            throw new InvalidOperationException($"A feature flag with key '{normalizedKey}' already exists.");
+        }   
+
+        var newFlag = new FeatureFlag
+        {
+            Id = Guid.NewGuid(),
+            Key = normalizedKey,
+            Name = request.Name,
+            Description = string.IsNullOrWhiteSpace(request.Description)
+                ? null
+                : request.Description.Trim()
+        };
+
+        _dbContext.FeatureFlags.Add(newFlag);
+        _dbContext.SaveChanges();
+
+        return GetByKey(newFlag.Key)!;
+    }
+
+    public FlagResponseDTO? Update(string key, UpdateFlagRequestDTO request)
+    {
+        var normalizedKey = key.Trim().ToLowerInvariant();
+        var flag = _dbContext.FeatureFlags.FirstOrDefault(f => f.Key == normalizedKey);
+        if (flag == null)
+        {
+            return null;
+        }
+
+        if (request.Name != null)
+        {
+            flag.Name = request.Name.Trim();
+        }
+
+        if (request.Description != null)
+        {
+            flag.Description = request.Description.Trim();
+        }
+
+        _dbContext.SaveChanges();
+
+        return MapToResponse(flag);
+    }
+
+    public bool Delete(string key)
+    {
+        var normalizedKey = key.Trim().ToLowerInvariant();
+        var flag = _dbContext.FeatureFlags.Include(f => f.Environments).FirstOrDefault(f => f.Key == normalizedKey);
+        if (flag == null)
+        {
+            return false;
+        }
+
+        _dbContext.FeatureFlags.Remove(flag);
+        _dbContext.SaveChanges();
+        return true;
+    }
+
+    public IEnumerable<FlagResponseDTO> GetByEnvironment(EnvironmentType environment)
+    {
+        return _dbContext.FeatureFlagEnvironments
+            .AsNoTracking()
+            .Include(env => env.FeatureFlag)
+            .Where(env => env.Environment == environment)
+            .Select(env => new FlagResponseDTO
+            {
+                Id = env.FeatureFlag!.Id,
+                Key = env.FeatureFlag.Key,
+                Name = env.FeatureFlag.Name,
+                Description = env.FeatureFlag.Description,
+                Environments = env.FeatureFlag.Environments.Select(e => new EnvironmentConfigResponseDTO
+                {
+                    Environment = e.Environment,
+                    Enabled = e.Enabled,
+                    PercentageRollout = e.PercentageRollout
+                }).ToList()
+            })
+            .ToList();
+    }
+
+    public EnvironmentConfigResponseDTO? GetEnvironmentConfiguration(string flagKey, EnvironmentType environment)
+    {
+    var normalizedKey = flagKey.Trim().ToLowerInvariant();
     var flag = _dbContext.FeatureFlags
         .AsNoTracking()
-        .FirstOrDefault(flag => flag.Key == flagKey);
+        .FirstOrDefault(flag => flag.Key == normalizedKey);
 
     if (flag is null)
     {
         return null;
     }
 
-    return _dbContext.FeatureFlagEnvironments
+    var environmentConfig = _dbContext.FeatureFlagEnvironments
         .AsNoTracking()
         .FirstOrDefault(env =>
             env.FeatureFlagId == flag.Id &&
             env.Environment == environment);
+
+    if (environmentConfig is null)
+    {
+        return null;
+    }
+
+    return MapToEnvironmentResponse(environmentConfig);
+    }
+
+    public EnvironmentConfigResponseDTO? CreateEnvironmentConfiguration(string flagKey, CreateEnvironmentDTO request)
+    {
+        var normalizedKey = flagKey.Trim().ToLowerInvariant();
+        var flag = _dbContext.FeatureFlags.FirstOrDefault(flag => flag.Key == normalizedKey);
+
+        if (flag is null)
+        {
+            return null;
+        }
+
+        var existingConfig = _dbContext.FeatureFlagEnvironments
+            .FirstOrDefault(env =>
+                env.FeatureFlagId == flag.Id &&
+                env.Environment == request.Environment);
+
+        if (existingConfig != null)
+        {
+            throw new InvalidOperationException($"Configuration for environment '{request.Environment}' already exists for flag '{flagKey}'.");
+        }
+
+        var newConfig = new FeatureFlagEnvironment
+        {
+            Id = Guid.NewGuid(),
+            FeatureFlagId = flag.Id,
+            Environment = request.Environment,
+            Enabled = request.Enabled,
+            PercentageRollout = request.PercentageRollout
+        };
+
+        _dbContext.FeatureFlagEnvironments.Add(newConfig);
+        _dbContext.SaveChanges();
+
+        return MapToEnvironmentResponse(newConfig);
+    }
+
+    public EnvironmentConfigResponseDTO? UpdateEnvironmentConfiguration(string flagKey, EnvironmentType environment, UpdateEnvironmentDTO request)
+    {
+        var normalizedKey = flagKey.Trim().ToLowerInvariant();
+
+        var existingConfig = _dbContext.FeatureFlagEnvironments
+            .FirstOrDefault(env =>
+                env.FeatureFlag!.Key == normalizedKey &&
+                env.Environment == environment);
+
+        if (existingConfig == null)
+        {
+            return null;
+        }
+
+        if (request.Enabled.HasValue)
+        {
+            existingConfig.Enabled = request.Enabled.Value;
+        }
+
+        if (request.PercentageRollout.HasValue)
+        {
+            existingConfig.PercentageRollout = Math.Clamp(request.PercentageRollout.Value, 0, 100);
+        }
+
+        _dbContext.SaveChanges();
+
+        return MapToEnvironmentResponse(existingConfig);
+    }
+
+    public bool DeleteEnvironmentConfiguration(string flagKey, EnvironmentType environment)
+    {
+        var normalizedKey = flagKey.Trim().ToLowerInvariant();
+
+        var existingConfig = _dbContext.FeatureFlagEnvironments
+            .FirstOrDefault(env =>
+                env.FeatureFlag!.Key == normalizedKey &&
+                env.Environment == environment);
+
+        if (existingConfig == null)
+        {
+            return false;
+        }
+
+        _dbContext.FeatureFlagEnvironments.Remove(existingConfig);
+        _dbContext.SaveChanges();
+
+        return true;
     }
 }

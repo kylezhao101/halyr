@@ -1,5 +1,6 @@
 using Halyr.Api.Services;
 using Microsoft.AspNetCore.Mvc;
+using Halyr.Api.DTOs;
 
 namespace Halyr.Api.Controllers
 
@@ -19,12 +20,6 @@ namespace Halyr.Api.Controllers
         public IActionResult Get()
         {
             var flags = _featureFlagService.GetAll();
-
-            if (flags == null)
-            {
-                return NotFound();
-            }
-
             return Ok(flags);
         }
 
@@ -40,5 +35,57 @@ namespace Halyr.Api.Controllers
 
             return Ok(flag);
         }
+
+        [HttpPost]
+        public IActionResult Create([FromBody] CreateFlagRequestDTO request)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            try
+            {
+                var createdFlag = _featureFlagService.Create(request);
+                return CreatedAtAction(nameof(GetByKey), new { key = createdFlag.Key }, createdFlag);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
+        }
+
+        [HttpPatch("{key}")]
+        public IActionResult Update(string key, [FromBody] UpdateFlagRequestDTO request)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var updatedFlag = _featureFlagService.Update(key, request);
+
+            if (updatedFlag == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(updatedFlag);
+        }
+
+        [HttpDelete("{key}")]
+        public IActionResult Delete(string key)
+        {
+            var deleted = _featureFlagService.Delete(key);
+
+            if (!deleted)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+
+        
     }
 }

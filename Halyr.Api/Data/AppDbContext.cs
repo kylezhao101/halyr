@@ -27,7 +27,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<FeatureFlagEnvironment>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.Environment).IsRequired();
+            entity.Property(e => e.Environment).HasConversion<string>().IsRequired();
 
             entity.HasIndex(e => new { e.FeatureFlagId, e.Environment }).IsUnique();
         });
