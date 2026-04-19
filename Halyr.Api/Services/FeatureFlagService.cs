@@ -189,27 +189,19 @@ public class FeatureFlagService : IFeatureFlagService
     public EnvironmentConfigResponseDTO? GetEnvironmentConfiguration(string flagKey, EnvironmentType environment)
     {
     var normalizedKey = NormalizeKey(flagKey);
-    var flag = _dbContext.FeatureFlags
+
+    var config = _dbContext.FeatureFlagEnvironments
         .AsNoTracking()
-        .FirstOrDefault(flag => flag.Key == normalizedKey);
+        .Where(env => env.FeatureFlag!.Key == normalizedKey && env.Environment == environment)
+        .Select(env => new EnvironmentConfigResponseDTO
+        {
+            Environment = env.Environment,
+            Enabled = env.Enabled,
+            PercentageRollout = env.PercentageRollout
+        })
+        .FirstOrDefault();
 
-    if (flag is null)
-    {
-        return null;
-    }
-
-    var environmentConfig = _dbContext.FeatureFlagEnvironments
-        .AsNoTracking()
-        .FirstOrDefault(env =>
-            env.FeatureFlagId == flag.Id &&
-            env.Environment == environment);
-
-    if (environmentConfig is null)
-    {
-        return null;
-    }
-
-    return MapToEnvironmentResponse(environmentConfig);
+    return config;
     }
 
     public async Task<EnvironmentConfigResponseDTO?> CreateEnvironmentConfiguration(string flagKey, CreateEnvironmentDTO request)
