@@ -17,7 +17,7 @@ public class FlagEnvironmentController : ControllerBase
     }
 
     [HttpGet("{environment}")]
-    public IActionResult GetEnvironmentConfiguration(string flagKey, EnvironmentType environment)
+    public async Task<IActionResult> GetEnvironmentConfiguration(string flagKey, EnvironmentType environment)
     {
 
         var config = _featureFlagService.GetEnvironmentConfiguration(flagKey, environment);
@@ -31,7 +31,7 @@ public class FlagEnvironmentController : ControllerBase
     }
 
     [HttpPost]
-    public IActionResult CreateEnvironmentConfiguration(string flagKey, [FromBody] CreateEnvironmentDTO request)
+    public async Task<IActionResult> CreateEnvironmentConfiguration(string flagKey, [FromBody] CreateEnvironmentDTO request)
     {
         if (!ModelState.IsValid)
         {
@@ -40,7 +40,7 @@ public class FlagEnvironmentController : ControllerBase
 
         try
         {
-            var createdConfig = _featureFlagService.CreateEnvironmentConfiguration(flagKey, request);
+            var createdConfig = await _featureFlagService.CreateEnvironmentConfiguration(flagKey, request);
             if (createdConfig == null)
             {
                 return NotFound();
@@ -54,14 +54,14 @@ public class FlagEnvironmentController : ControllerBase
     }
 
     [HttpPatch("{environment}")]
-    public IActionResult UpdateEnvironmentConfiguration(string flagKey, EnvironmentType environment, [FromBody] UpdateEnvironmentDTO request)
+    public async Task<IActionResult> UpdateEnvironmentConfiguration(string flagKey, EnvironmentType environment, [FromBody] UpdateEnvironmentDTO request)
     {
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
         }
 
-        var updatedConfig = _featureFlagService.UpdateEnvironmentConfiguration(flagKey, environment, request);
+        var updatedConfig = await _featureFlagService.UpdateEnvironmentConfiguration(flagKey, environment, request);
 
         if (updatedConfig == null)
         {
@@ -72,9 +72,9 @@ public class FlagEnvironmentController : ControllerBase
     }
 
     [HttpDelete("{environment}")]
-    public IActionResult DeleteEnvironmentConfiguration(string flagKey, EnvironmentType environment)
+    public async Task<IActionResult> DeleteEnvironmentConfiguration(string flagKey, EnvironmentType environment)
     {
-        var success = _featureFlagService.DeleteEnvironmentConfiguration(flagKey, environment);
+        var success = await _featureFlagService.DeleteEnvironmentConfiguration(flagKey, environment);
 
         if (!success)
         {

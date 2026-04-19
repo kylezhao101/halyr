@@ -1,59 +1,47 @@
 using Halyr.Api.DTOs;
 using Halyr.Api.Helpers;
+using Halyr.Api.Common.Cache;
 
 namespace Halyr.Api.Services;
 
 public class FeatureFlagEvaluationService : IFeatureFlagEvaluationService
 {
     private readonly IFeatureFlagService _featureFlagService;
+    private readonly IFeatureFlagCache _cache;
 
-    public FeatureFlagEvaluationService(IFeatureFlagService featureFlagService)
+    public FeatureFlagEvaluationService(IFeatureFlagService featureFlagService, IFeatureFlagCache cache)
     {
         _featureFlagService = featureFlagService;
+        _cache = cache;
     }
 
-    public EvaluateFlagResponseDTO Evaluate(EvaluateFlagRequestDTO request)
+    public async Task<EvaluateFlagResponseDTO> Evaluate(EvaluateFlagRequestDTO request)
     {
-        var flag = _featureFlagService.GetByKey(request.FlagKey);
-
-        if (flag is null)
-        {
-            return new EvaluateFlagResponseDTO
-            {
-                FlagKey = request.FlagKey,
-                UserId = request.UserId,
-                Enabled = false,
-                Bucket = -1,
-                PercentageRollout = 0 
-            };
-        }
-
-        var config = _featureFlagService.GetEnvironmentConfiguration(request.FlagKey, request.Environment);
+        var config = _cache.GetEnvironmentConfigAsync(request.FlagKey, request.Environment).Result;
 
         if (config is null)
         {
-            return new EvaluateFlagResponseDTO
-            {
-                FlagKey = request.FlagKey,
-                UserId = request.UserId,
-                Environment = request.Environment,
-                Enabled = false,
-                Bucket = -1,
-                PercentageRollout = 0
-            };
-        }
+            config = _featureFlagService.GetEnvironmentConfiguration(request.FlagKey, request.Environment);
 
-        if (!config.Enabled)
-        {
-            return new EvaluateFlagResponseDTO
+            if (config is null)
             {
-                FlagKey = flag.Key,
-                UserId = request.UserId,
-                Environment = config.Environment,
-                Enabled = false,
-                Bucket = -1,
-                PercentageRollout = config.PercentageRollout
-            };
+                return new EvaluateFlagResponseDTO
+                {
+                    FlagKey = request.FlagKey,
+                    UserId = request.UserId,
+                    Environment = request.Environment,
+                    Enabled = false,
+                    Bucket = -1,
+                    PercentageRollout = 0
+                };
+            }
+
+            await _cache.SetEnvironmentConfigAsync(
+                request.FlagKey,
+                request.Environment,
+                config,
+                CacheTtls.EnvironmentConfig
+            );
         }
 
         var rollout = Math.Clamp(config.PercentageRollout, 0, 100);
@@ -62,7 +50,7 @@ public class FeatureFlagEvaluationService : IFeatureFlagEvaluationService
 
         return new EvaluateFlagResponseDTO
         {
-            FlagKey = flag.Key,
+            FlagKey = request.FlagKey,
             UserId = request.UserId,
             Environment = config.Environment,
             Enabled = enabled,

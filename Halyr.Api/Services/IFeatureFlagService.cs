@@ -12,12 +12,12 @@ public interface IFeatureFlagService
     FlagResponseDTO? GetByKey(string key);
 
     FlagResponseDTO Create(CreateFlagRequestDTO request);
-    FlagResponseDTO? Update(string key, UpdateFlagRequestDTO request);
-    bool Delete(string key);
+    Task<FlagResponseDTO?> Update(string key, UpdateFlagRequestDTO request);
+    Task<bool> Delete(string key);
 
     IEnumerable<FlagResponseDTO> GetByEnvironment(EnvironmentType environment);
     EnvironmentConfigResponseDTO? GetEnvironmentConfiguration(string flagKey, EnvironmentType environment);
-    EnvironmentConfigResponseDTO? CreateEnvironmentConfiguration(string flagKey, CreateEnvironmentDTO request);
-    EnvironmentConfigResponseDTO? UpdateEnvironmentConfiguration(string flagKey, EnvironmentType environment, UpdateEnvironmentDTO request);
-    bool DeleteEnvironmentConfiguration(string flagKey, EnvironmentType environment);
+    Task<EnvironmentConfigResponseDTO?> CreateEnvironmentConfiguration(string flagKey, CreateEnvironmentDTO request);
+    Task<EnvironmentConfigResponseDTO?> UpdateEnvironmentConfiguration(string flagKey, EnvironmentType environment, UpdateEnvironmentDTO request);
+    Task<bool> DeleteEnvironmentConfiguration(string flagKey, EnvironmentType environment);
 }

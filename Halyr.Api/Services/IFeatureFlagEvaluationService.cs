@@ -4,5 +4,5 @@ namespace Halyr.Api.Services;
 
 public interface IFeatureFlagEvaluationService
 {
-    EvaluateFlagResponseDTO Evaluate(EvaluateFlagRequestDTO request);
+    Task<EvaluateFlagResponseDTO> Evaluate(EvaluateFlagRequestDTO request);
 }

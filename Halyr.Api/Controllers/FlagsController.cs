@@ -17,14 +17,14 @@ namespace Halyr.Api.Controllers
         }
 
         [HttpGet]
-        public IActionResult Get()
+        public async Task<IActionResult> Get()
         {
             var flags = _featureFlagService.GetAll();
             return Ok(flags);
         }
 
         [HttpGet("{key}")]
-        public IActionResult GetByKey(string key)
+        public async Task<IActionResult> GetByKey(string key)
         {
             var flag = _featureFlagService.GetByKey(key);
 
@@ -37,7 +37,7 @@ namespace Halyr.Api.Controllers
         }
 
         [HttpPost]
-        public IActionResult Create([FromBody] CreateFlagRequestDTO request)
+        public async Task<IActionResult> Create([FromBody] CreateFlagRequestDTO request)
         {
             if (!ModelState.IsValid)
             {
@@ -56,14 +56,14 @@ namespace Halyr.Api.Controllers
         }
 
         [HttpPatch("{key}")]
-        public IActionResult Update(string key, [FromBody] UpdateFlagRequestDTO request)
+        public async Task<IActionResult> Update(string key, [FromBody] UpdateFlagRequestDTO request)
         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
 
-            var updatedFlag = _featureFlagService.Update(key, request);
+            var updatedFlag = await _featureFlagService.Update(key, request);
 
             if (updatedFlag == null)
             {
@@ -74,9 +74,9 @@ namespace Halyr.Api.Controllers
         }
 
         [HttpDelete("{key}")]
-        public IActionResult Delete(string key)
+        public async Task<IActionResult> Delete(string key)
         {
-            var deleted = _featureFlagService.Delete(key);
+            var deleted = await _featureFlagService.Delete(key);
 
             if (!deleted)
             {

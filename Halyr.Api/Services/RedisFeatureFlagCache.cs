@@ -1,9 +1,7 @@
-
-
 using System.Text.Json;
-using Halyr.Api.Data;
 using Halyr.Api.DTOs;
 using StackExchange.Redis;
+using Halyr.Api.Enums;
 
 public class RedisFeatureFlagCache : IFeatureFlagCache
 {
@@ -15,24 +13,34 @@ public class RedisFeatureFlagCache : IFeatureFlagCache
         _db = redis.GetDatabase();
     }
 
-    private static string EnvKey(string flagKey, string environmentKey)
+    private static string EnvKey(string flagKey, EnvironmentType environmentKey)
     {
-        return $"featureflag:flag:{flagKey}:env:{environmentKey}";
+        return $"featureflag:flag:{flagKey}:env:{NormalizeEnvironmentKey(environmentKey)}";
     }
 
     private static string FlagKey(string flagKey)
     {
-        return $"featureflag:flag:{flagKey}";
+        return $"featureflag:flag:{NormalizeFlagKey(flagKey)}";
     }
 
-    private static string EnvListKey(string environmentKey)
+    private static string EnvListKey(EnvironmentType environmentKey)
     {
-        return $"featureflag:flags:env:{environmentKey}";
+        return $"featureflag:flags:env:{NormalizeEnvironmentKey(environmentKey)}";
     }
 
-    public async Task<EnvironmentConfigResponseDTO?> GetEnvironmentConfigAsync(string flagKey, string environmentKey)
+    private static string NormalizeFlagKey(string flagKey)
     {
-        var envConfigJson = await _db.StringGetAsync(EnvKey(flagKey, environmentKey));
+        return flagKey.ToLowerInvariant();
+    }
+
+    private static string NormalizeEnvironmentKey(EnvironmentType environmentKey)
+    {
+        return environmentKey.ToString().ToLowerInvariant();
+    }
+
+    public async Task<EnvironmentConfigResponseDTO?> GetEnvironmentConfigAsync(string flagKey, EnvironmentType environmentKey)
+    {
+        var envConfigJson = await _db.StringGetAsync(EnvKey(NormalizeFlagKey(flagKey), environmentKey));
         if (envConfigJson.IsNullOrEmpty)
             return null;
 
@@ -42,20 +50,20 @@ public class RedisFeatureFlagCache : IFeatureFlagCache
         );
     }
 
-    public async Task SetEnvironmentConfigAsync(string flagKey, string environmentKey, EnvironmentConfigResponseDTO envConfig, TimeSpan ttl)
+    public async Task SetEnvironmentConfigAsync(string flagKey, EnvironmentType environmentKey, EnvironmentConfigResponseDTO envConfig, TimeSpan ttl)
     {
         var envConfigJson = JsonSerializer.Serialize(envConfig, _jsonOptions);
-        await _db.StringSetAsync(EnvKey(flagKey, environmentKey), envConfigJson, ttl);
+        await _db.StringSetAsync(EnvKey(NormalizeFlagKey(flagKey), environmentKey), envConfigJson, ttl);
     }
 
-    public async Task InvalidateEnvironmentConfigAsync(string flagKey, string environmentKey)
+    public async Task InvalidateEnvironmentConfigAsync(string flagKey, EnvironmentType environmentKey)
     {
-        await _db.KeyDeleteAsync(EnvKey(flagKey, environmentKey));
+        await _db.KeyDeleteAsync(EnvKey(NormalizeFlagKey(flagKey), environmentKey));
     }
 
-    public async Task<FlagResponseDTO?> GetFeatureFlagAsync(string flagkey)
+    public async Task<FlagResponseDTO?> GetFeatureFlagAsync(string flagKey)
     {
-        var flagJson = await _db.StringGetAsync(FlagKey(flagkey));
+        var flagJson = await _db.StringGetAsync(FlagKey(flagKey));
         if (flagJson.IsNullOrEmpty)
             return null;
 
@@ -76,9 +84,18 @@ public class RedisFeatureFlagCache : IFeatureFlagCache
         await _db.KeyDeleteAsync(FlagKey(flagKey));
     }
 
-    public async Task InvalidateEnvironmentListAsync(string environmentKey)
+    public async Task InvalidateEnvironmentListAsync(EnvironmentType environmentKey)
     {
         await _db.KeyDeleteAsync(EnvListKey(environmentKey));
+    }
+
+    public async Task InvalidateAfterEnvironmentConfigWriteAsync(string flagKey, EnvironmentType environmentKey)
+    {
+        await Task.WhenAll(
+            InvalidateEnvironmentConfigAsync(flagKey, environmentKey),
+            InvalidateEnvironmentListAsync(environmentKey),
+            InvalidateFeatureFlagAsync(flagKey)
+        );
     }
 
 }

@@ -10,10 +10,17 @@ namespace Halyr.Api.Services;
 public class FeatureFlagService : IFeatureFlagService
 {
     private readonly AppDbContext _dbContext;
+    private readonly IFeatureFlagCache _cache;
 
-    public FeatureFlagService(AppDbContext dbContext)
+    public FeatureFlagService(AppDbContext dbContext, IFeatureFlagCache cache)
     {
         _dbContext = dbContext;
+        _cache = cache;
+    }
+
+    private static string NormalizeKey(string key)
+    {
+        return key.Trim().ToLowerInvariant();
     }
 
     private static FlagResponseDTO MapToResponse(FeatureFlag flag)
@@ -65,7 +72,7 @@ public class FeatureFlagService : IFeatureFlagService
 
     public FlagResponseDTO? GetByKey(string key)
     {
-        var normalizedKey = key.Trim().ToLowerInvariant();
+        var normalizedKey = NormalizeKey(key);
         return _dbContext.FeatureFlags
             .AsNoTracking()
             .Include(flag => flag.Environments)
@@ -88,7 +95,7 @@ public class FeatureFlagService : IFeatureFlagService
 
     public FlagResponseDTO Create(CreateFlagRequestDTO request)
     {
-        var normalizedKey = request.Key.Trim().ToLowerInvariant();
+        var normalizedKey = NormalizeKey(request.Key);
 
         var exists = _dbContext.FeatureFlags.Any(f => f.Key == normalizedKey);
         if (exists)
@@ -112,9 +119,9 @@ public class FeatureFlagService : IFeatureFlagService
         return GetByKey(newFlag.Key)!;
     }
 
-    public FlagResponseDTO? Update(string key, UpdateFlagRequestDTO request)
+    public async Task<FlagResponseDTO?> Update(string key, UpdateFlagRequestDTO request)
     {
-        var normalizedKey = key.Trim().ToLowerInvariant();
+        var normalizedKey = NormalizeKey(key);
         var flag = _dbContext.FeatureFlags.FirstOrDefault(f => f.Key == normalizedKey);
         if (flag == null)
         {
@@ -133,12 +140,15 @@ public class FeatureFlagService : IFeatureFlagService
 
         _dbContext.SaveChanges();
 
+        var environmentKeys = flag.Environments.Select(env => env.Environment).ToList();
+        await Task.WhenAll(environmentKeys.Select(env => _cache.InvalidateAfterEnvironmentConfigWriteAsync(flag.Key, env)));
+
         return MapToResponse(flag);
     }
 
-    public bool Delete(string key)
+    public async Task<bool> Delete(string key)
     {
-        var normalizedKey = key.Trim().ToLowerInvariant();
+        var normalizedKey = NormalizeKey(key);
         var flag = _dbContext.FeatureFlags.Include(f => f.Environments).FirstOrDefault(f => f.Key == normalizedKey);
         if (flag == null)
         {
@@ -147,6 +157,10 @@ public class FeatureFlagService : IFeatureFlagService
 
         _dbContext.FeatureFlags.Remove(flag);
         _dbContext.SaveChanges();
+
+        var environmentKeys = flag.Environments.Select(env => env.Environment).ToList();
+        await Task.WhenAll(environmentKeys.Select(env => _cache.InvalidateAfterEnvironmentConfigWriteAsync(flag.Key, env)));
+
         return true;
     }
 
@@ -174,7 +188,7 @@ public class FeatureFlagService : IFeatureFlagService
 
     public EnvironmentConfigResponseDTO? GetEnvironmentConfiguration(string flagKey, EnvironmentType environment)
     {
-    var normalizedKey = flagKey.Trim().ToLowerInvariant();
+    var normalizedKey = NormalizeKey(flagKey);
     var flag = _dbContext.FeatureFlags
         .AsNoTracking()
         .FirstOrDefault(flag => flag.Key == normalizedKey);
@@ -198,9 +212,9 @@ public class FeatureFlagService : IFeatureFlagService
     return MapToEnvironmentResponse(environmentConfig);
     }
 
-    public EnvironmentConfigResponseDTO? CreateEnvironmentConfiguration(string flagKey, CreateEnvironmentDTO request)
+    public async Task<EnvironmentConfigResponseDTO?> CreateEnvironmentConfiguration(string flagKey, CreateEnvironmentDTO request)
     {
-        var normalizedKey = flagKey.Trim().ToLowerInvariant();
+        var normalizedKey = NormalizeKey(flagKey);
         var flag = _dbContext.FeatureFlags.FirstOrDefault(flag => flag.Key == normalizedKey);
 
         if (flag is null)
@@ -230,12 +244,14 @@ public class FeatureFlagService : IFeatureFlagService
         _dbContext.FeatureFlagEnvironments.Add(newConfig);
         _dbContext.SaveChanges();
 
+        await _cache.InvalidateEnvironmentListAsync(request.Environment);
+
         return MapToEnvironmentResponse(newConfig);
     }
 
-    public EnvironmentConfigResponseDTO? UpdateEnvironmentConfiguration(string flagKey, EnvironmentType environment, UpdateEnvironmentDTO request)
+    public async Task<EnvironmentConfigResponseDTO?> UpdateEnvironmentConfiguration(string flagKey, EnvironmentType environment, UpdateEnvironmentDTO request)
     {
-        var normalizedKey = flagKey.Trim().ToLowerInvariant();
+        var normalizedKey = NormalizeKey(flagKey);
 
         var existingConfig = _dbContext.FeatureFlagEnvironments
             .FirstOrDefault(env =>
@@ -259,12 +275,16 @@ public class FeatureFlagService : IFeatureFlagService
 
         _dbContext.SaveChanges();
 
+        await _cache.InvalidateEnvironmentConfigAsync(flagKey, environment);
+        await _cache.InvalidateEnvironmentListAsync(environment);
+        await _cache.InvalidateFeatureFlagAsync(flagKey);
+        
         return MapToEnvironmentResponse(existingConfig);
     }
 
-    public bool DeleteEnvironmentConfiguration(string flagKey, EnvironmentType environment)
+    public async Task<bool> DeleteEnvironmentConfiguration(string flagKey, EnvironmentType environment)
     {
-        var normalizedKey = flagKey.Trim().ToLowerInvariant();
+        var normalizedKey = NormalizeKey(flagKey);
 
         var existingConfig = _dbContext.FeatureFlagEnvironments
             .FirstOrDefault(env =>
@@ -278,6 +298,10 @@ public class FeatureFlagService : IFeatureFlagService
 
         _dbContext.FeatureFlagEnvironments.Remove(existingConfig);
         _dbContext.SaveChanges();
+
+        await _cache.InvalidateEnvironmentConfigAsync(flagKey, environment);
+        await _cache.InvalidateEnvironmentListAsync(environment);
+        await _cache.InvalidateFeatureFlagAsync(flagKey);
 
         return true;
     }
