@@ -16,9 +16,9 @@ public class EvaluationController : ControllerBase
     }
 
     [HttpPost]
-    public ActionResult<EvaluateFlagResponseDTO> Evaluate([FromBody] EvaluateFlagRequestDTO request)
+    public async Task<ActionResult<EvaluateFlagResponseDTO>> Evaluate([FromBody] EvaluateFlagRequestDTO request)
     {
-        var response = _featureEvaluationService.Evaluate(request);
+        var response = await _featureEvaluationService.Evaluate(request);
         return Ok(response);
     }
 }

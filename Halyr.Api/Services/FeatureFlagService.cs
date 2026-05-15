@@ -186,11 +186,11 @@ public class FeatureFlagService : IFeatureFlagService
             .ToList();
     }
 
-    public EnvironmentConfigResponseDTO? GetEnvironmentConfiguration(string flagKey, EnvironmentType environment)
+    public async Task<EnvironmentConfigResponseDTO?> GetEnvironmentConfiguration(string flagKey, EnvironmentType environment)
     {
     var normalizedKey = NormalizeKey(flagKey);
 
-    var config = _dbContext.FeatureFlagEnvironments
+    var config = await _dbContext.FeatureFlagEnvironments
         .AsNoTracking()
         .Where(env => env.FeatureFlag!.Key == normalizedKey && env.Environment == environment)
         .Select(env => new EnvironmentConfigResponseDTO
@@ -199,7 +199,7 @@ public class FeatureFlagService : IFeatureFlagService
             Enabled = env.Enabled,
             PercentageRollout = env.PercentageRollout
         })
-        .FirstOrDefault();
+        .FirstOrDefaultAsync();
 
     return config;
     }

@@ -17,11 +17,11 @@ public class FeatureFlagEvaluationService : IFeatureFlagEvaluationService
 
     public async Task<EvaluateFlagResponseDTO> Evaluate(EvaluateFlagRequestDTO request)
     {
-        var config = _cache.GetEnvironmentConfigAsync(request.FlagKey, request.Environment).Result;
+        var config = await _cache.GetEnvironmentConfigAsync(request.FlagKey, request.Environment);
 
         if (config is null)
         {
-            config = _featureFlagService.GetEnvironmentConfiguration(request.FlagKey, request.Environment);
+            config = await _featureFlagService.GetEnvironmentConfiguration(request.FlagKey, request.Environment);
 
             if (config is null)
             {
